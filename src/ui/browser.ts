@@ -56,6 +56,8 @@ function showDevices(payload: unknown): void {
   select.value = config.deviceId ?? '';
   element('config-form').hidden = false;
   element('logout').hidden = false;
+  element('reauth').hidden = false;
+  element('auth-form').hidden = true;
   element('connection-status').textContent = 'Signed in';
   notice(devices.length ? 'Select your humidifier and save its settings.' : 'No supported HU1509 or HU1510 humidifier was found.');
 }
@@ -74,6 +76,7 @@ for (let hour = 1; hour <= 12; hour++) {
   checkbox.type = 'checkbox'; checkbox.id = `hour-${hour}`;
   label.append(checkbox, document.createTextNode(`${hour} h`)); element('hours').append(label);
 }
+element('reauth').addEventListener('click', () => { element('auth-form').hidden = false; input('email').focus(); });
 input('group-timers').addEventListener('change', timerVisibility);
 element('auth-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -102,6 +105,7 @@ element('logout').addEventListener('click', () => {
     element('config-form').hidden = true; element('code-form').hidden = true; element('logout').hidden = true;
     input('email').value = ''; input('secret').value = ''; input('code').value = '';
     select.replaceChildren(new Option('Select a humidifier', ''));
+    element('reauth').hidden = true; element('auth-form').hidden = false;
     element('connection-status').textContent = 'Not signed in';
     notice('Signed out. The device connection will close shortly.');
   });
@@ -122,6 +126,8 @@ element('config-form').addEventListener('submit', event => {
   });
 });
 void run(async () => {
+  element('airplus').dataset.theme = typeof window.homebridge.userCurrentLightingMode === 'function'
+    ? await window.homebridge.userCurrentLightingMode() : 'light';
   const existing: unknown = await window.homebridge.getPluginConfig();
   const configs = z.array(z.unknown()).parse(existing);
   config = configSchema.parse(configs[0] ?? {});

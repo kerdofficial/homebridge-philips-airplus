@@ -1,5 +1,5 @@
 <link rel="stylesheet" href="app.css">
-<main class="airplus">
+<main class="airplus" id="airplus">
   <header><h2>Philips Air+</h2><p>Connect your humidifier and choose its controls in Apple Home.</p></header>
   <p id="notice" role="status" aria-live="polite"></p>
   <fieldset id="setup-fields">
@@ -19,6 +19,7 @@
         <input class="form-control" id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
         <button class="btn btn-primary" type="submit">Verify code</button>
       </form>
+      <button class="btn btn-outline-secondary" id="reauth" type="button" hidden>Sign in again</button>
       <button class="btn btn-outline-secondary" id="logout" type="button" hidden>Sign out</button>
     </section>
     <form id="config-form" hidden>
