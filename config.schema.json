@@ -1,0 +1,13 @@
+{
+  "pluginAlias": "PhilipsAirPlus",
+  "pluginType": "platform",
+  "singular": true,
+  "customUi": true,
+  "headerDisplay": "Configure a Philips Air+ humidifier.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": { "type": "string", "title": "Accessory name", "default": "Humidifier" }
+    }
+  }
+}
