@@ -10,7 +10,6 @@
     "rootDir": "src",
     "declaration": true,
     "skipLibCheck": true,
-    "verbatimModuleSyntax": true,
     "types": [
       "node"
     ]
