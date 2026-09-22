@@ -1,46 +1,10 @@
-<link rel="stylesheet" href="app.css">
-<main class="airplus" id="airplus">
-  <header><h2>Philips Air+</h2><p>Connect your humidifier and choose its controls in Apple Home.</p></header>
-  <p id="notice" role="status" aria-live="polite"></p>
-  <fieldset id="setup-fields">
-    <section aria-labelledby="connection-title">
-      <h3 id="connection-title">Connection</h3>
-      <p id="connection-status">Checking connection...</p>
-      <form id="auth-form">
-        <label for="email">Philips account email</label>
-        <input class="form-control" id="email" type="email" autocomplete="email" required>
-        <label for="secret">Cloud signing key</label>
-        <input class="form-control" id="secret" type="password" autocomplete="off" aria-describedby="secret-help">
-        <p id="secret-help" class="help">Stored privately by Homebridge. Leave blank to keep a saved key.</p>
-        <button class="btn btn-primary" type="submit">Send sign-in code</button>
-      </form>
-      <form id="code-form" hidden>
-        <label for="code">Email verification code</label>
-        <input class="form-control" id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
-        <button class="btn btn-primary" type="submit">Verify code</button>
-      </form>
-      <button class="btn btn-outline-secondary" id="reauth" type="button" hidden>Sign in again</button>
-      <button class="btn btn-outline-secondary" id="logout" type="button" hidden>Sign out</button>
-    </section>
-    <form id="config-form" hidden>
-      <section aria-labelledby="device-title">
-        <h3 id="device-title">Device</h3>
-        <label for="device">Humidifier</label>
-        <select class="form-control" id="device" required><option value="">Select a humidifier</option></select>
-        <div class="names">
-          <div><label for="name">Accessory name</label><input class="form-control" id="name" maxlength="64" required></div>
-          <div><label for="temperature-name">Temperature sensor name</label><input class="form-control" id="temperature-name" maxlength="64" required></div>
-          <div><label for="humidity-name">Humidity sensor name</label><input class="form-control" id="humidity-name" maxlength="64" required></div>
-        </div>
-      </section>
-      <section aria-labelledby="controls-title">
-        <h3 id="controls-title">Apple Home controls</h3>
-        <p>Power and target humidity are always available. Choose the additional services to display.</p>
-        <div id="groups"></div>
-        <fieldset id="timer-options" hidden><legend>Timer durations</legend><div id="hours"></div></fieldset>
-      </section>
-      <footer><button class="btn btn-primary" type="submit">Save settings</button><p class="help">Restart the child bridge after saving. Service changes can affect existing Home automations.</p></footer>
-    </form>
-  </fieldset>
-</main>
+<p id="notice" role="status" aria-live="polite"></p>
+<div class="mb-3">
+  <button class="btn btn-primary" id="signin" type="button">Sign in</button>
+  <span id="signed-in" hidden>
+    <button class="btn btn-outline-secondary" id="select-device" type="button">Select device</button>
+    <button class="btn btn-outline-secondary" id="device-settings" type="button">Device settings</button>
+    <button class="btn btn-outline-secondary" id="logout" type="button">Sign out</button>
+  </span>
+</div>
 <script src="app.js"></script>

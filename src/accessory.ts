@@ -1,7 +1,8 @@
 import type { API, Characteristic, CharacteristicValue, PlatformAccessory, Service, WithUUID } from 'homebridge';
 import type { Config } from './config.js';
-import { DeviceState, effects, fields, modes, type Patch } from './state.js';
+import { DeviceState, fields, modes, type Patch } from './state.js';
 import type { DeviceSession } from './session.js';
+import { closestColor, controlPosition, controlPositions, nearest, reportedColor } from './controls.js';
 
 type Reader = (state: DeviceState) => CharacteristicValue;
 type Writer = (value: CharacteristicValue, state: DeviceState) => Patch | undefined;
@@ -12,6 +13,7 @@ export class HumidifierAccessory {
   private readonly bindings: Binding[] = [];
   private readonly services = new Set<Service>();
   private lastBrightness = 123;
+  private poweredBrightness = 123;
   private readonly C: API['hap']['Characteristic'];
   private readonly S: API['hap']['Service'];
 
@@ -19,7 +21,10 @@ export class HumidifierAccessory {
     private readonly config: Config, private readonly session: SessionControl) {
     this.C = api.hap.Characteristic;
     this.S = api.hap.Service;
-    if ([115, 123].includes(accessory.context.lastBrightness)) this.lastBrightness = accessory.context.lastBrightness;
+    const { lastBrightness, poweredBrightness } = accessory.context;
+    if (lastBrightness === 115 || lastBrightness === 123) this.lastBrightness = lastBrightness;
+    if (poweredBrightness === 0 || poweredBrightness === 115 || poweredBrightness === 123) this.poweredBrightness = poweredBrightness;
+    else this.poweredBrightness = this.lastBrightness;
     this.setup();
     session.on('state', () => this.update());
     this.update();
@@ -32,6 +37,10 @@ export class HumidifierAccessory {
     if (value === undefined || value < min || value > max) throw this.unavailable();
     return value;
   }
+  private percent(value: CharacteristicValue): number {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) throw this.invalid();
+    return value;
+  }
   private bind(characteristic: Characteristic, read: Reader, write?: Writer): void {
     this.bindings.push({ characteristic, read });
     characteristic.onGet(() => {
@@ -41,23 +50,36 @@ export class HumidifierAccessory {
     if (write) characteristic.onSet(async value => {
       try { await this.session.command(state => write(value, state)); }
       catch { throw this.unavailable(); }
+      // HAP stores the requested value after onSet returns; then restore the confirmed, rounded value.
+      setImmediate(() => this.update());
     });
   }
 
   private service(type: WithUUID<typeof Service>, name: string, subtype: string): Service {
     const service = this.accessory.getServiceById(type, subtype) ?? this.accessory.addService(new type(name, subtype));
+    const previousName = service.getCharacteristic(this.C.Name).value;
+    service.addOptionalCharacteristic(this.C.ConfiguredName);
+    const configuredName = service.getCharacteristic(this.C.ConfiguredName);
+    if (!configuredName.value || previousName !== name) configuredName.updateValue(name);
+    configuredName.onSet(value => {
+      if (typeof value !== 'string' || !value.trim()) throw this.invalid();
+      setImmediate(() => this.api.updatePlatformAccessories([this.accessory]));
+    });
     service.setCharacteristic(this.C.Name, name);
     this.services.add(service);
     return service;
   }
 
-  private switch(name: string, subtype: string, read: (state: DeviceState) => boolean, on: Writer, off: Writer): void {
-    const service = this.service(this.S.Switch, name, subtype);
-    this.bind(service.getCharacteristic(this.C.On), read, (value, state) => {
-      if (typeof value !== 'boolean') throw this.invalid();
-      if (value) return on(value, state);
-      return read(state) ? off(value, state) : undefined;
-    });
+  private powerOn(state: DeviceState): Patch {
+    return { [fields.power]: 1, ...(!this.value(state, fields.power, 0, 1) && this.config.brightness
+      ? { [fields.brightness]: this.poweredBrightness } : {}) };
+  }
+
+  private brightness(state: DeviceState): number {
+    if (!this.value(state, fields.power, 0, 1)) return 0;
+    const raw = state.number(fields.brightness);
+    if (raw !== 0 && raw !== 115 && raw !== 123) throw this.unavailable();
+    return raw === 123 ? 100 : raw === 115 ? 50 : 0;
   }
 
   private setup(): void {
@@ -68,23 +90,30 @@ export class HumidifierAccessory {
       .setCharacteristic(C.SerialNumber, this.config.deviceId ?? 'unconfigured');
     const humidifier = this.service(S.HumidifierDehumidifier, this.config.name, 'humidifier');
     humidifier.setPrimaryService(true);
-    this.bind(humidifier.getCharacteristic(C.Active), state => this.value(state, fields.power, 0, 1), value => {
+    this.bind(humidifier.getCharacteristic(C.Active), state => this.value(state, fields.power, 0, 1), (value, state) => {
       if (value !== 0 && value !== 1) throw this.invalid();
-      return { [fields.power]: value };
+      return value ? this.powerOn(state) : { [fields.power]: 0 };
     });
     this.bind(humidifier.getCharacteristic(C.CurrentRelativeHumidity), state => this.value(state, fields.humidity, 0, 100));
     this.bind(humidifier.getCharacteristic(C.CurrentHumidifierDehumidifierState), state => {
       if (!this.value(state, fields.power, 0, 1)) return C.CurrentHumidifierDehumidifierState.INACTIVE;
-      return this.value(state, fields.humidity, 0, 100) >= this.value(state, fields.target, 40, 70)
+      return this.value(state, fields.mode, 0, 65) === modes.Auto
+        && this.value(state, fields.humidity, 0, 100) >= this.value(state, fields.target, 40, 70)
         ? C.CurrentHumidifierDehumidifierState.IDLE : C.CurrentHumidifierDehumidifierState.HUMIDIFYING;
     });
     this.bind(humidifier.getCharacteristic(C.TargetHumidifierDehumidifierState).updateValue(C.TargetHumidifierDehumidifierState.HUMIDIFIER).setProps({ validValues: [C.TargetHumidifierDehumidifierState.HUMIDIFIER] }),
       () => C.TargetHumidifierDehumidifierState.HUMIDIFIER, () => undefined);
-    this.bind(humidifier.getCharacteristic(C.RelativeHumidityHumidifierThreshold).updateValue(this.session.state.number(fields.target) ?? 40).setProps({ minValue: 40, maxValue: 70, minStep: 10 }),
-      state => this.value(state, fields.target, 40, 70), value => {
-        if (typeof value !== 'number' || ![40, 50, 60, 70].includes(value)) throw this.invalid();
-        return { [fields.target]: value };
-      });
+    this.bind(humidifier.getCharacteristic(C.RelativeHumidityHumidifierThreshold).setProps({ minValue: 0, maxValue: 100, minStep: 1, validValues: null }), state => {
+      const position = controlPosition(this.value(state, fields.power, 0, 1), state.number(fields.mode) ?? -1, state.number(fields.target) ?? -1);
+      if (position === undefined) throw this.unavailable();
+      return position;
+    }, (value, state) => {
+      const position = nearest(this.percent(value), controlPositions);
+      if (!position) return { [fields.power]: 0 };
+      return { ...this.powerOn(state), [fields.mode]: position === 25 ? modes.Medium : position === 100 ? modes.High : modes.Auto,
+        ...(position >= 40 && position <= 70 ? { [fields.target]: position } : {}) };
+    });
+    if (this.config.brightness) this.setupLight();
     if (this.config.temperature) {
       const sensor = this.service(S.TemperatureSensor, this.config.temperatureName, 'temperature');
       this.bind(sensor.getCharacteristic(C.CurrentTemperature).setProps({ minValue: -40, maxValue: 100 }), state => this.value(state, fields.temperature, -400, 1000) / 10);
@@ -93,53 +122,41 @@ export class HumidifierAccessory {
       const sensor = this.service(S.HumiditySensor, this.config.humidityName, 'humidity');
       this.bind(sensor.getCharacteristic(C.CurrentRelativeHumidity), state => this.value(state, fields.humidity, 0, 100));
     }
-    if (this.config.modes) for (const [name, mode] of Object.entries(modes)) {
-      this.switch(name, `mode-${name.toLowerCase()}`, state => state.number(fields.power) === 1 && state.number(fields.mode) === mode,
-        () => ({ [fields.power]: 1, [fields.mode]: mode }), () => ({ [fields.power]: 0 }));
-    }
-    if (this.config.lampModes) {
-      this.switch('Humidity light', 'lamp-humidity', state => state.number(fields.lamp) === 1,
-        () => ({ [fields.lamp]: 1 }), () => ({ [fields.lamp]: 0 }));
-      this.switch('Ambient light', 'lamp-ambient', state => state.number(fields.lamp) === 2,
-        (_value, state) => ({ [fields.lamp]: 2, [fields.ambient]: [1, 2, 3, 4].includes(state.number(fields.ambient) ?? 0) ? state.number(fields.ambient)! : 1 }),
-        () => ({ [fields.lamp]: 0 }));
-    }
-    if (this.config.effects) for (const [name, effect] of Object.entries(effects)) {
-      this.switch(name, `effect-${name.toLowerCase()}`, state => state.number(fields.lamp) === 2 && state.number(fields.ambient) === effect,
-        () => ({ [fields.lamp]: 2, [fields.ambient]: effect }), () => ({ [fields.lamp]: 0 }));
-    }
-    if (this.config.brightness) {
-      const light = this.service(S.Lightbulb, 'Brightness', 'brightness');
-      this.bind(light.getCharacteristic(C.On), state => this.value(state, fields.brightness, 0, 123) !== 0,
-        value => ({ [fields.brightness]: value ? this.lastBrightness : 0 }));
-      this.bind(light.getCharacteristic(C.Brightness).setProps({ minValue: 0, maxValue: 100, minStep: 50 }), state => {
-        const raw = state.number(fields.brightness);
-        if (![0, 115, 123].includes(raw ?? -1)) throw this.unavailable();
-        return raw === 123 ? 100 : raw === 115 ? 50 : 0;
-      }, value => {
-        if (typeof value !== 'number' || value < 0 || value > 100) throw this.invalid();
-        return { [fields.brightness]: value < 25 ? 0 : value < 75 ? 115 : 123 };
-      });
-    }
-    if (this.config.timers) for (const hours of this.config.timerHours) {
-      this.switch(`Timer ${hours} ${hours === 1 ? 'hour' : 'hours'}`, `timer-${hours}`, state => state.number(fields.timer) === hours + 1,
-        () => ({ [fields.timer]: hours + 1 }), () => ({ [fields.timer]: 0 }));
-    }
-    for (const [enabled, name, subtype, field] of [
-      [this.config.beep, 'Beep', 'beep', fields.beep], [this.config.standby, 'Standby sensors', 'standby', fields.standby],
-    ] as const) if (enabled) {
-      this.switch(name, subtype, state => state.number(field) === 1, () => ({ [field]: 1 }), () => ({ [field]: 0 }));
-    }
     for (const service of [...this.accessory.services]) if (!this.services.has(service)) this.accessory.removeService(service);
+  }
+
+  private setupLight(): void {
+    const { C, S } = this;
+    const light = this.service(S.Lightbulb, this.config.brightnessName, 'brightness');
+    this.bind(light.getCharacteristic(C.On), state => this.brightness(state) > 0, (value, state) => {
+      if (typeof value !== 'boolean') throw this.invalid();
+      return this.value(state, fields.power, 0, 1) ? { [fields.brightness]: value ? this.lastBrightness : 0 } : undefined;
+    });
+    this.bind(light.getCharacteristic(C.Brightness).setProps({ minValue: 0, maxValue: 100, minStep: 1, validValues: null }), state => this.brightness(state), (value, state) => {
+      const brightness = nearest(this.percent(value), [0, 50, 100]);
+      return this.value(state, fields.power, 0, 1) ? { [fields.brightness]: brightness === 100 ? 123 : brightness === 50 ? 115 : 0 } : undefined;
+    });
+    if (this.config.color) {
+      const color = (state: DeviceState) => reportedColor(this.value(state, fields.lamp, 0, 2), this.value(state, fields.ambient, 1, 4));
+      this.bind(light.getCharacteristic(C.Hue).setProps({ minValue: 0, maxValue: 360, minStep: 1 }), state => color(state).hue, (value, state) => {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 360) throw this.invalid();
+        return this.value(state, fields.power, 0, 1) ? { [fields.lamp]: 2, [fields.ambient]: closestColor(value).effect } : undefined;
+      });
+      this.bind(light.getCharacteristic(C.Saturation).setProps({ minValue: 0, maxValue: 100, minStep: 1 }), state => color(state).saturation, value => { this.percent(value); return undefined; });
+    } else {
+      for (const type of [C.Hue, C.Saturation]) if (light.testCharacteristic(type)) light.removeCharacteristic(light.getCharacteristic(type));
+    }
   }
 
   update(): void {
     const { state } = this.session;
     const brightness = state.number(fields.brightness);
-    if (brightness === 115 || brightness === 123) {
-      if (this.lastBrightness !== brightness || this.accessory.context.lastBrightness !== brightness) {
-        this.lastBrightness = brightness;
-        this.accessory.context.lastBrightness = brightness;
+    if (state.available() && state.number(fields.power) === 1 && (brightness === 0 || brightness === 115 || brightness === 123)) {
+      this.poweredBrightness = brightness;
+      if (brightness) this.lastBrightness = brightness;
+      if (this.accessory.context.poweredBrightness !== this.poweredBrightness || this.accessory.context.lastBrightness !== this.lastBrightness) {
+        this.accessory.context.poweredBrightness = this.poweredBrightness;
+        this.accessory.context.lastBrightness = this.lastBrightness;
         this.api.updatePlatformAccessories([this.accessory]);
       }
     }

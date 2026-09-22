@@ -3,11 +3,70 @@
   "pluginType": "platform",
   "singular": true,
   "customUi": true,
-  "headerDisplay": "Configure a Philips Air+ humidifier.",
+  "headerDisplay": "Philips Air+ humidifier. Sign in and select a device, then save these settings.",
   "schema": {
     "type": "object",
     "properties": {
-      "name": { "type": "string", "title": "Accessory name", "default": "Humidifier" }
+      "name": {
+        "type": "string",
+        "title": "Accessory name",
+        "default": "Humidifier",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "deviceId": {
+        "type": "string",
+        "title": "Selected device ID",
+        "readonly": true,
+        "description": "Use Select device above to choose a humidifier.",
+        "pattern": "^[a-zA-Z0-9_-]+$"
+      },
+      "brightnessName": {
+        "type": "string",
+        "title": "Light name",
+        "default": "Light",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "brightness": {
+        "type": "boolean",
+        "title": "Show light control",
+        "default": true
+      },
+      "color": {
+        "type": "boolean",
+        "title": "Enable color selection (Warm, Dawn, Calm)",
+        "default": true
+      },
+      "temperature": {
+        "type": "boolean",
+        "title": "Show temperature sensor",
+        "default": true
+      },
+      "temperatureName": {
+        "type": "string",
+        "title": "Temperature sensor name",
+        "default": "Temperature",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "humidity": {
+        "type": "boolean",
+        "title": "Show humidity sensor",
+        "default": true
+      },
+      "humidityName": {
+        "type": "string",
+        "title": "Humidity sensor name",
+        "default": "Humidity",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 64
+      }
     }
-  }
+  },
+  "footerDisplay": "Main slider: 0 Off, 25 Medium, 40/50/60/70 Auto targets, 100 High. Brightness snaps to 0/50/100. Restart the child bridge after saving."
 }
