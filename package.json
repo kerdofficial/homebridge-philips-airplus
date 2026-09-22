@@ -3,8 +3,16 @@
   "version": "0.1.0",
   "description": "Homebridge integration for Philips Air+ HU1509 and HU1510 humidifiers",
   "type": "module",
-  "private": true,
+  "author": "Dániel Kerekes",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kerdofficial/homebridge-philips-airplus.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "keywords": [
     "homebridge-plugin"
   ],

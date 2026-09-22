@@ -13,7 +13,15 @@ This is an unofficial integration. It requires an internet connection and a comp
 
 The signing key is an application-level credential, not your Philips password. It is intentionally not distributed in this repository. Obtain it from a compatible Air+ client configuration; protocol references are listed below. A Philips password is not needed for email-code sign-in.
 
-## Build and install
+## Install
+
+Install `homebridge-philips-airplus` from the Homebridge UI plugin search. For a global npm-managed Homebridge installation:
+
+```sh
+npm install -g homebridge-philips-airplus
+```
+
+To build and install a local package instead:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -21,7 +29,7 @@ pnpm check
 pnpm pack
 ```
 
-Install the resulting package on the Homebridge host using its custom package installation flow or the package manager used by that Homebridge installation. For a global npm-managed installation:
+Install the resulting package on the Homebridge host using its custom package installation flow or the package manager used by that Homebridge installation. For example:
 
 ```sh
 npm install -g /path/to/homebridge-philips-airplus-0.1.0.tgz
