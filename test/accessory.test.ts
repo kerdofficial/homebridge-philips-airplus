@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { HomebridgeAPI } from '../node_modules/homebridge/dist/api.js';
+import { HomebridgeAPI } from './homebridge.js';
+import register from '../src/index.js';
 import { HumidifierAccessory } from '../src/accessory.js';
 import { configSchema } from '../src/config.js';
 import { DeviceState, type Patch } from '../src/state.js';
@@ -87,4 +88,8 @@ test('sensor reads expose real units and fail when stale', async () => {
   assert.equal(await temperature.handleGetRequest(), 24);
   session.state.deviceUpdatedAt = 1;
   await assert.rejects(temperature.handleGetRequest());
+});
+
+test('plugin entry point registers with the installed Homebridge API', () => {
+  assert.doesNotThrow(() => register(new HomebridgeAPI()));
 });
