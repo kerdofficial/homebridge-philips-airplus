@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env*
+!.env.example
+.state/
+.runtime/
+.homebridge/
+coverage/
+*.log
+*.tgz
+.DS_Store
+config.json
+*.local.*
+references/
+results/
+homebridge-ui/public/app.js
+homebridge-ui/server.js
