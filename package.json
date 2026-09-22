@@ -26,7 +26,8 @@
     "lint": "eslint . --max-warnings=0",
     "test": "tsx --test test/*.test.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "audit:package": "node scripts/audit-package.mjs"
   },
   "packageManager": "pnpm@10.24.0",
   "dependencies": {
