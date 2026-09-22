@@ -38,28 +38,42 @@ Restart Homebridge so it discovers the plugin. Open the plugin settings:
 
 One platform configuration selects one device. The plugin does not automatically expose every device in the account. Renaming preserves the accessory identity. Removing services can affect automations that refer to them.
 
-## Controls
+## Apple Home controls
 
-| Service | Behavior |
+The accessory combines a humidifier control, an optional light, and optional temperature and humidity sensors. There are no mode switches or TV accessories. Apple Home determines the visual order and presentation.
+
+The main slider is a combined mode and humidity control:
+
+| Slider position | Device setting |
 | --- | --- |
-| Humidifier | Power and a target humidity of 40, 50, 60 or 70 percent |
-| Temperature | Temperature in degrees Celsius |
-| Humidity | Relative humidity in percent |
-| Auto, Sleep, Medium, High | Turning on selects the mode and powers on; turning off the active mode powers off |
-| Humidity light, Ambient light | Select the lamp mode; turning off the active mode disables the lamp |
-| Warm, Dawn, Calm, Breath | Select an effect and enable Ambient mode; turning off the active effect disables the lamp |
-| Brightness | A separate light control: 0% off, 50% low, 100% bright |
-| Timer | Selected durations from 1 to 12 hours; turning off the active duration cancels the timer |
-| Beep | Sound feedback on or off |
-| Standby sensors | Sensor operation while the humidifier is in standby |
+| 0 | Off |
+| 25 | Medium |
+| 40, 50, 60, 70 | Auto with that target humidity |
+| 100 | High |
 
-Turning off an inactive selector has no effect. Brightness is independent of ambient effect selection. Intermediate brightness requests round to the nearest supported level, with ties rounding upward. Turning brightness on restores its previous nonzero level, or Bright if no level is known.
+The Home app labels this slider as a humidity percentage. Positions 25 and 100 select modes, not actual humidity targets. The separate humidity sensor always shows measured humidity. Sleep is not selectable on this slider; when selected in Air+, it is represented at the low manual position, 25. Moving the slider to 25 selects Medium.
 
-Ambient mode retains the device's known effect, defaulting to Warm when unknown. Lighting, target humidity and timer commands do not implicitly power on the humidifier.
+Every value from 0 to 100 is accepted and rounded to the nearest supported position; ties select the lower position. In particular, Home requests of 20 or 30 select Medium instead of causing a communication error. Changing the slider to a nonzero position powers on the device. The Off/Humidify menu changes power without replacing the last mode.
 
-Sensors, modes and lighting are enabled by default. Timers, Beep and Standby sensors are optional. Enabling timers defaults to 1, 2 and 4 hours; select other durations in the settings. Timer switches represent the selected duration, not a countdown. A timer selected in Air+ for a hidden duration will not have an active matching switch in Home; enable that duration to expose it.
+The light brightness slider accepts the same continuous input range and rounds to 0% Off, 50% Low or 100% Bright, with ties selecting the lower level. While the humidifier is off, the light reports Off and 0%; light commands have no effect and do not power on the humidifier. Powering on restores the last known brightness used while powered on, including Off. Turning just the light on restores its last nonzero brightness, defaulting to Bright if unknown. Home does not visually disable the light controls while the humidifier is off.
 
-The Apple Home app determines the layout of these standard services. It does not provide arbitrary Philips-specific dropdowns. The humidifying/idle indication is inferred from power, current humidity and target humidity; it is not an independently measured atomizer state. No air-pollution or water-level measurement is fabricated.
+Optional color selection uses Home's native hue and saturation controls. Hue chooses the nearest of these representative colors and enables Ambient mode:
+
+| Representative color | Philips effect |
+| --- | --- |
+| Yellow | Warm |
+| Orange | Dawn |
+| Pale blue | Calm |
+
+These are fixed device effects, not arbitrary RGB output. Saturation returns to the preset's value. The selected hue and saturation are representative UI values, not calibrated measurements of emitted light. Breath, Humidity light and lamp-off states selected in Air+ use a neutral color indicator; the plugin does not claim they are one of the three fixed effects. They are not selectable through this color control. Color changes do not change brightness or turn on the humidifier.
+
+Humidifying versus idle is inferred from power, mode and the measured humidity/target relationship, not from an independent atomizer sensor. No air-pollution or water-level measurement is fabricated.
+
+## Device settings in Homebridge
+
+Open **Device settings** in the plugin UI to read the current sleep timer, sound feedback and standby sensor settings. Choose the setting to change and apply it; other settings are preserved. The timer supports Off or 1-12 hours and controls the device's own timer. Responses wait for a reported device confirmation.
+
+These settings are not Home switches, stored schedules or startup defaults. Restarting Homebridge does not apply them. Use Air+ for Sleep, Breath and other controls not exposed by this version.
 
 ## Connection and privacy
 
@@ -71,15 +85,15 @@ Credentials are stored under `philips-airplus/credentials.json` in Homebridge's 
 
 ## Configuration
 
-The custom UI generates the platform configuration. Its fields are:
+The plugin uses Homebridge's native schema form for configuration and its native generated forms for sign-in, device selection and one-time device settings. There is no separate control website or custom-styled settings page. The small UI integration keeps sign-in credentials out of the platform configuration. Its fields are:
 
 - `platform`: `PhilipsAirPlus`
 - `deviceId`: the explicitly selected cloud device ID
-- `name`, `temperatureName`, `humidityName`: display names
-- `temperature`, `humidity`, `modes`, `lampModes`, `effects`, `brightness`, `timers`, `beep`, `standby`: service visibility
-- `timerHours`: selected whole hours between 1 and 12
+- `name`, `temperatureName`, `humidityName`, `brightnessName`: display names
+- `temperature`, `humidity`, `brightness`: service visibility, all enabled by default
+- `color`: native color selection when the light service is enabled, enabled by default
 
-Credentials are never placed in this configuration. The plugin preserves Homebridge-managed properties such as `_bridge` when saving.
+Credentials are never placed in this configuration. The plugin preserves Homebridge-managed properties such as `_bridge` when saving. Retired switch configuration fields are discarded. Upgrading from the earlier switch layout removes those switches while retaining the accessory and surviving service identifiers; automations using removed switches must be recreated. Existing Home-assigned names are retained unless their configured default changes.
 
 ## Development
 
