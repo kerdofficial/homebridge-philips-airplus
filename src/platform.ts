@@ -24,7 +24,20 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
       api.on('shutdown', () => { ++this.generation; unwatchFile(file); this.session?.stop(); });
     });
   }
-  configureAccessory(accessory: PlatformAccessory): void { this.cached.push(accessory); }
+  configureAccessory(accessory: PlatformAccessory): void {
+    const hap = this.api.hap;
+    const unavailable = () => new hap.HapStatusError(hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    for (const service of accessory.services) {
+      if (service.UUID === hap.Service.AccessoryInformation.UUID) continue;
+      for (const characteristic of service.characteristics) {
+        if ([hap.Characteristic.Name.UUID, hap.Characteristic.ConfiguredName.UUID].includes(characteristic.UUID)) continue;
+        characteristic.updateValue(unavailable());
+        characteristic.onGet(() => { throw unavailable(); });
+        if (characteristic.props.perms.includes(hap.Perms.PAIRED_WRITE)) characteristic.onSet(() => { throw unavailable(); });
+      }
+    }
+    this.cached.push(accessory);
+  }
 
   private async launch(): Promise<void> {
     const generation = ++this.generation;
@@ -46,7 +59,10 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN, PLATFORM, [accessory]);
       }
       const obsolete = this.cached.filter(item => item.UUID !== uuid);
-      if (obsolete.length) this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, obsolete);
+      if (obsolete.length) {
+        this.api.unregisterPlatformAccessories(PLUGIN, PLATFORM, obsolete);
+        for (const item of obsolete) this.cached.splice(this.cached.indexOf(item), 1);
+      }
       accessory.displayName = config.name;
       accessory.context.model = device.model;
       const session = new DeviceSession(cloud, device.id);
