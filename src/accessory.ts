@@ -78,9 +78,9 @@ export class HumidifierAccessory {
       return this.value(state, fields.humidity, 0, 100) >= this.value(state, fields.target, 40, 70)
         ? C.CurrentHumidifierDehumidifierState.IDLE : C.CurrentHumidifierDehumidifierState.HUMIDIFYING;
     });
-    this.bind(humidifier.getCharacteristic(C.TargetHumidifierDehumidifierState).setProps({ validValues: [C.TargetHumidifierDehumidifierState.HUMIDIFIER] }),
+    this.bind(humidifier.getCharacteristic(C.TargetHumidifierDehumidifierState).updateValue(C.TargetHumidifierDehumidifierState.HUMIDIFIER).setProps({ validValues: [C.TargetHumidifierDehumidifierState.HUMIDIFIER] }),
       () => C.TargetHumidifierDehumidifierState.HUMIDIFIER, () => undefined);
-    this.bind(humidifier.getCharacteristic(C.RelativeHumidityHumidifierThreshold).setProps({ minValue: 40, maxValue: 70, minStep: 10 }),
+    this.bind(humidifier.getCharacteristic(C.RelativeHumidityHumidifierThreshold).updateValue(this.session.state.number(fields.target) ?? 40).setProps({ minValue: 40, maxValue: 70, minStep: 10 }),
       state => this.value(state, fields.target, 40, 70), value => {
         if (typeof value !== 'number' || ![40, 50, 60, 70].includes(value)) throw this.invalid();
         return { [fields.target]: value };
