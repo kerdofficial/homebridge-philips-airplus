@@ -13,6 +13,9 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
   private readonly config: Config | undefined;
   private session: DeviceSession | undefined;
   private generation = 0;
+  private stopped = false;
+  private failures = 0;
+  private retry: NodeJS.Timeout | undefined;
   constructor(private readonly log: Logger, config: PlatformConfig, private readonly api: API) {
     const parsed = configSchema.safeParse(config);
     if (parsed.success) this.config = parsed.data;
@@ -21,7 +24,13 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
       const file = join(api.user.storagePath(), 'philips-airplus', 'credentials.json');
       watchFile(file, { interval: 5000, persistent: false }, () => { void this.launch(); });
       void this.launch();
-      api.on('shutdown', () => { ++this.generation; unwatchFile(file); this.session?.stop(); });
+      api.on('shutdown', () => {
+        this.stopped = true;
+        ++this.generation;
+        clearTimeout(this.retry);
+        unwatchFile(file);
+        this.session?.stop();
+      });
     });
   }
   configureAccessory(accessory: PlatformAccessory): void {
@@ -40,12 +49,15 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
   }
 
   private async launch(): Promise<void> {
+    if (this.stopped) return;
     const generation = ++this.generation;
+    clearTimeout(this.retry);
     this.session?.stop();
     const config = this.config;
     if (!config?.deviceId) { this.log.info('Select a humidifier in the plugin settings.'); return; }
     try {
       const credentials = await new CredentialStore(this.api.user.storagePath()).read();
+      if (generation !== this.generation) return;
       if (!credentials) { this.log.warn('Sign in using the plugin settings.'); return; }
       const cloud = new Cloud(credentials);
       const device = (await cloud.devices()).find(device => device.id === config.deviceId);
@@ -71,6 +83,13 @@ export class PhilipsAirPlusPlatform implements DynamicPlatformPlugin {
       new HumidifierAccessory(this.api, accessory, config, session);
       this.api.updatePlatformAccessories([accessory]);
       session.start();
-    } catch (error) { this.log.error(safeError(error)); }
+      this.failures = 0;
+    } catch (error) {
+      if (generation !== this.generation) return;
+      this.log.error(safeError(error));
+      const delay = Math.min(60_000, 1000 * 2 ** Math.min(this.failures++, 6));
+      this.log.warn(`Retrying cloud discovery in ${delay / 1000} seconds.`);
+      this.retry = setTimeout(() => { void this.launch(); }, delay);
+    }
   }
 }

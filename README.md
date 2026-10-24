@@ -32,7 +32,7 @@ pnpm pack
 Install the resulting package on the Homebridge host using its custom package installation flow or the package manager used by that Homebridge installation. For example:
 
 ```sh
-npm install -g /path/to/homebridge-philips-airplus-0.1.0.tgz
+npm install -g /path/to/homebridge-philips-airplus-0.1.1.tgz
 ```
 
 Restart Homebridge so it discovers the plugin. Open the plugin settings:
