@@ -1,6 +1,6 @@
 {
   "name": "homebridge-philips-airplus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Homebridge integration for Philips Air+ HU1509 and HU1510 humidifiers",
   "type": "module",
   "author": "Dániel Kerekes",
